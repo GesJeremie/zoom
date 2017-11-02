@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf-8'/>
+  <meta content='width=device-width, initial-scale=1.0' name='viewport'>
+  <title>jQuery Zoom Demo</title>
+  <style>
+
+    .zoom-container {
+        margin: 50px auto;
+        width: 320px;
+    }
+
+    .zoom {
+        display: block;
+        height: 0;
+        overflow: hidden;
+        padding: 0 0 150.15384615%;
+        position: relative;
+    }
+
+    .zoom img {
+        display: block;
+        min-width: 100%;
+        width: 100%;
+    }
+
+  </style>
+</head>
+<body>
+    <div class="zoom-container">
+        <div data-zoom-src="http://s7d1.scene7.com/is/image/BHLDN/20170612_jessicadelphi_a?$zoom-xl$" class="zoom">
+            <img src="http://s7d1.scene7.com/is/image/BHLDN/20170612_jessicadelphi_a?$pdpmain$" alt="" class="pannable-image">
+        </div>
+    </div>
+  
+  <script src='http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js'></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.4/lodash.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.js"></script>
+  <script src="https://cdn.rawgit.com/hammerjs/touchemulator/0.0.2/touch-emulator.js" />
+  <script> TouchEmulator(); </script>
+  <script src="app.js"></script>
+  <script>require('zoom.js');</script>
+  <script>
+    $(document).ready(function(){
+      $('.zoom').zoom();
+    });
+  </script>
+
+</body>
+</html>

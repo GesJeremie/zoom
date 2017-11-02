@@ -2,6 +2,13 @@
  * @author Jeremie Ges <jges@weblinc.com>
  */
 
+/**
+ * Todos:
+ * - Pan diagonal
+ * - Lazy load picture option
+ * - Transition option (maybe possible to change PAN / scale)
+ * - Destroy Method
+ */
 (function($) {
     function Zoom() {
 
@@ -86,10 +93,10 @@
             this.getInstanceHammer(this.$dom.container.get(0))
                 .on('doubletap', this.onDoubleTapContainer.bind(this))
                 .on('pan',  this.onPanContainer.bind(this))
-                .on('panright', this.onPanRightContainer.bind(this))
-                .on('panleft', this.onPanLeftContainer.bind(this))
-                .on('pandown', this.onPanDownContainer.bind(this))
-                .on('panup', this.onPanUpContainer.bind(this))
+                //.on('panright', this.onPanRightContainer.bind(this))
+                //.on('panleft', this.onPanLeftContainer.bind(this))
+                //.on('pandown', this.onPanDownContainer.bind(this))
+                //.on('panup', this.onPanUpContainer.bind(this))
                 .on('pinchstart', this.onPinchStartContainer.bind(this))
                 .on('pinch', this.onPinchContainer.bind(this));
         },
@@ -108,8 +115,8 @@
                     maxWidth: 'none',
                     maxHeight: 'none',
                     transformOrigin: '0 0',
-                    transform: 'translate(0px, 0px) scale(1)',
-                    transition: 'all 1s'
+                    transform: 'translate(0, 0) scale(1)',
+                    transition: 'all ' + this.options.transition
                 })
                 .attr('role', 'presentation')
                 .appendTo(this.$dom.container);
@@ -124,8 +131,45 @@
          * When the user start to pan the container
          */
         this.onPanContainer = function(e) {
+            this.$dom.image.css({
+                transition: 'all 0s'
+            });
+
             e.preventDefault();
             this.loadImage();
+
+            var x = this.flags.imageTranslate.x,
+                y = this.flags.imageTranslate.y,
+                newX = x + (-e.deltaX/1.5),
+                newY = y + (-e.deltaY/1.5);
+
+            // Boundaries
+            if (newX > 0) {
+                newX = 0;
+            }
+
+            if (newY > 0) {
+                newY = 0;
+            }
+
+            if (newX < this.getPanLimits().x) {
+                newX = this.getPanLimits().x;
+            }
+
+            if (newY < this.getPanLimits().y) {
+                newY = this.getPanLimits().y;
+            }
+
+
+
+            this.$dom.image.css({
+                transform: this.getCssRuleTranslate(newX, newY) + ' ' + this.getCssRuleScale(this.flags.currentScale)
+            });
+
+            this.flags.imageTranslate.y = newY;
+            this.flags.imageTranslate.x = newX;
+
+            console.log(e.deltaX, e.deltaY);
         },
 
         /**
@@ -135,6 +179,10 @@
          * @param  {Event} e The pinch event
          */
         this.onPinchStartContainer = function(e) {
+            this.$dom.image.css({
+                transition: 'all 1s'
+            });
+
             e.preventDefault();
             this.loadImage();
             this.flags.pinchCoordinates = e.center;
@@ -184,26 +232,22 @@
             mousePositionOnImageX = this.flags.pinchCoordinates.x - containerOffset.left;
             mousePositionOnImageY = this.flags.pinchCoordinates.y - containerOffset.top;
 
-            /**
-             * Objective
-             * take offsetX and offsetY down to 0 at the same rate that scale goes down to 1.
-             */
-
-
             offsetX = mousePositionOnImageX * this.options.deltas.scale;
             offsetY = mousePositionOnImageY * this.options.deltas.scale;
-            // debugger;
 
             x = this.flags.imageTranslate.x < 0 ? this.flags.imageTranslate.x : 0;
             y = this.flags.imageTranslate.y < 0 ? this.flags.imageTranslate.y : 0;
 
-            // offsetX = offsetX < ('full width of image') - this.$dom.container.width() ? offsetX + x : offsetX * scale;
             offsetX = offsetX + x;
             offsetY = offsetY + y;
 
+            if (scale <= 1) {
+                scale = 1;
+                offsetX = 0;
+                offsetY = 0;
+            }
+
             this.$dom.image.css({
-                //width: this.$dom.container.width() * scale,
-                //height: this.$dom.container.outerHeight() * scale,
                 transform: this.getCssRuleTranslate(offsetX, offsetY) + ' ' + this.getCssRuleScale(scale)
             });
 
@@ -241,8 +285,6 @@
             offsetY = offsetY < 0 ? offsetY + this.flags.imageTranslate.y : 0;
 
             this.$dom.image.css({
-                //width: this.$dom.thumbnail.width() * scale,
-                //height: this.$dom.container.outerHeight() * scale,
                 transform: this.getCssRuleTranslate(offsetX, offsetY) + ' ' + this.getCssRuleScale(scale)
             });
 
@@ -257,14 +299,15 @@
          * to its maximum or minimum
          */
         this.onDoubleTapContainer = function(e) {
-            console.log('double tap');
             var coordinates = e.center;
-
-            console.log(coordinates);
 
             e.preventDefault();
 
             this.loadImage();
+
+            this.$dom.image.css({
+                transition: 'all 1s'
+            });
 
             if (this.flags.currentScale === 1) {
                 this.zoomMaximum(coordinates);
@@ -277,21 +320,40 @@
          * When the user pan up, move
          * the picture on the bottom
          */
-        this.onPanUpContainer = function() {
+        this.onPanUpContainer = function(e) {
 
             var x = this.flags.imageTranslate.x,
                 y = this.flags.imageTranslate.y,
                 newY = y - this.options.deltas.pan;
+                newX = x;
+ 
 
+            if (this.getDirection(e) === 'right') {
+                // 0 to 90
+                // 10 to 80 -> apply slow
+                // 30 to 60 -> apply aggressive
+                newX = x - (this.options.deltas.pan * velocity);
+            }
+
+            if (this.getDirection(e) === 'left') {
+                // 90 to 180
+                // 100 to 170 -> apply slow
+                // 120 to 150 -> apply aggressive
+                
+                if (e.angle )
+                newX = x + (this.options.deltas.pan / 4);
+            }
+            
             if (newY < this.getPanLimits().y) {
                 return;
             }
 
             this.$dom.image.css({
-                transform: this.getCssRuleTranslate(x, newY) + ' ' + this.getCssRuleScale(this.flags.currentScale)
+                transform: this.getCssRuleTranslate(newX, newY) + ' ' + this.getCssRuleScale(this.flags.currentScale)
             });
 
             this.flags.imageTranslate.y = newY;
+            this.flags.imageTranslate.x = newX;
         },
 
         /**
@@ -299,13 +361,9 @@
          * the picture on the top
          */
         this.onPanDownContainer = function() {
-            console.log('on pan down');
             var x = this.flags.imageTranslate.x,
                 y = this.flags.imageTranslate.y;
                 newY = y + this.options.deltas.pan;
-
-            console.log(x);
-            console.log(y);
 
             if (newY > 0) {
                 return;
@@ -370,18 +428,12 @@
                 mousePositionOnImageY = (coordinates.y - containerOffset.top),
                 offsetX = -(mousePositionOnImageX * (maximumScale - this.flags.currentScale)),
                 offsetY = -(mousePositionOnImageY * (maximumScale - this.flags.currentScale));
-                //offsetX = -(mousePositionOnImageX),
-                //offsetY = -(mousePositionOnImageY);
 
             if (offsetY > 0) {
                 offsetY = 0;
             }
-            console.log('mousePositionOnImage', mousePositionOnImageX, mousePositionOnImageY);
-            console.log('offset', offsetX, offsetY);
 
             this.$dom.image.css({
-                //width: this.$dom.container.width() * maximumScale,
-                //height: this.$dom.container.outerHeight() * maximumScale,
                 transform: this.getCssRuleTranslate(offsetX, offsetY) + ' ' + this.getCssRuleScale(maximumScale)
             });
 
@@ -397,11 +449,9 @@
             var minimumScale = 1;
 
             this.$dom.image.css({
-                //width: this.$dom.container.width() * minimumScale,
-                //height: this.$dom.container.outerHeight() * minimumScale,
                 top: 0,
                 left: 0,
-                transform: 'translate(0, 0) scale(1)'
+                transform: this.getCssRuleTranslate(0, 0) + ' ' + this.getCssRuleScale(minimumScale)
             });
 
             this.flags.imageTranslate.x = 0;
@@ -437,6 +487,19 @@
 
             this.$dom.image.attr('src', this.getUrlImage());
             this.flags.imageIntentLoading = true;
+        },
+
+        this.getDirection = function(e) {
+
+            if (e.angle === -90) { 
+                return 'straight';
+            }
+
+            if (e.angle < -90) {
+                return 'right';
+            } 
+            
+            return 'left';
         },
 
         /**
@@ -489,7 +552,7 @@
         this.getNaturalDimensionsThumbnail = function() {
             return {
                 width: this.$dom.thumbnail.prop('naturalWidth'),
-                height: this.$dom.thumbnail.prop('natureHeight')
+                height: this.$dom.thumbnail.prop('naturalHeight')
             }
         },
 
@@ -526,7 +589,7 @@
             var manager = new Hammer.Manager(element),
                 doubleTap = new Hammer.Tap({event: 'doubletap', taps: 2}),
                 pinch = new Hammer.Pinch(),
-                pan = new Hammer.Pan({threshold: 1});
+                pan = new Hammer.Pan({threshold: 0, direction: Hammer.DIRECTION_ALL});
 
             manager.add([doubleTap, pinch, pan]);
 
@@ -548,9 +611,11 @@
     };
 
     $.fn.zoom.defaults = {
+        transition: '1s',
+        lazyLoad: true,
         deltas: {
-            pan: 10,
-            scale: 0.04
+            pan: 20,
+            scale: 0.05
         }
     };
 

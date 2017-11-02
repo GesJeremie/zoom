@@ -243,10 +243,10 @@ require.register("zoom.js", function(exports, require, module) {
             this.getInstanceHammer(this.$dom.container.get(0))
                 .on('doubletap', this.onDoubleTapContainer.bind(this))
                 .on('pan',  this.onPanContainer.bind(this))
-                .on('panright', this.onPanRightContainer.bind(this))
-                .on('panleft', this.onPanLeftContainer.bind(this))
-                .on('pandown', this.onPanDownContainer.bind(this))
-                .on('panup', this.onPanUpContainer.bind(this))
+                //.on('panright', this.onPanRightContainer.bind(this))
+                //.on('panleft', this.onPanLeftContainer.bind(this))
+                //.on('pandown', this.onPanDownContainer.bind(this))
+                //.on('panup', this.onPanUpContainer.bind(this))
                 .on('pinchstart', this.onPinchStartContainer.bind(this))
                 .on('pinch', this.onPinchContainer.bind(this));
         },
@@ -282,11 +282,44 @@ require.register("zoom.js", function(exports, require, module) {
          */
         this.onPanContainer = function(e) {
             this.$dom.image.css({
-                transition: 'all 0.1s'
+                transition: 'all 0s'
             });
 
             e.preventDefault();
             this.loadImage();
+
+            var x = this.flags.imageTranslate.x,
+                y = this.flags.imageTranslate.y,
+                newX = x + (-e.deltaX/1.5),
+                newY = y + (-e.deltaY/1.5);
+
+            // Boundaries
+            if (newX > 0) {
+                newX = 0;
+            }
+
+            if (newY > 0) {
+                newY = 0;
+            }
+
+            if (newX < this.getPanLimits().x) {
+                newX = this.getPanLimits().x;
+            }
+
+            if (newY < this.getPanLimits().y) {
+                newY = this.getPanLimits().y;
+            }
+
+
+
+            this.$dom.image.css({
+                transform: this.getCssRuleTranslate(newX, newY) + ' ' + this.getCssRuleScale(this.flags.currentScale)
+            });
+
+            this.flags.imageTranslate.y = newY;
+            this.flags.imageTranslate.x = newX;
+
+            console.log(e.deltaX, e.deltaY);
         },
 
         /**
@@ -443,19 +476,24 @@ require.register("zoom.js", function(exports, require, module) {
                 y = this.flags.imageTranslate.y,
                 newY = y - this.options.deltas.pan;
                 newX = x;
-
-            /*
-            delta = 100%
-            e.angle 
+ 
 
             if (this.getDirection(e) === 'right') {
-                newX = x - (this.options.deltas.pan / 4);
+                // 0 to 90
+                // 10 to 80 -> apply slow
+                // 30 to 60 -> apply aggressive
+                newX = x - (this.options.deltas.pan * velocity);
             }
 
             if (this.getDirection(e) === 'left') {
+                // 90 to 180
+                // 100 to 170 -> apply slow
+                // 120 to 150 -> apply aggressive
+                
+                if (e.angle )
                 newX = x + (this.options.deltas.pan / 4);
             }
-            */
+            
             if (newY < this.getPanLimits().y) {
                 return;
             }
@@ -664,7 +702,7 @@ require.register("zoom.js", function(exports, require, module) {
         this.getNaturalDimensionsThumbnail = function() {
             return {
                 width: this.$dom.thumbnail.prop('naturalWidth'),
-                height: this.$dom.thumbnail.prop('natureHeight')
+                height: this.$dom.thumbnail.prop('naturalHeight')
             }
         },
 
