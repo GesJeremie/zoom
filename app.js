@@ -147,21 +147,256 @@ var __makeRelativeRequire = function(require, mappings, pref) {
     return require(name);
   }
 };
+require.register("magnify.js", function(exports, require, module) {
+/**
+ * @author Jeremie Ges <jges@weblinc.com>
+ */
+(function($) {
+
+  function Magnify() {
+
+      /**
+       * DOM accessors
+       * @type {Object}
+       */
+      this.$dom = {
+          container: null,
+          image: null
+      },
+
+      /**
+       * Keep track of things
+       * @type {Object}
+       */
+      this.flags = {
+          imageLoaded: false,
+      },
+
+      /**
+       * Contains every options of $.fn.magnify.defaults
+       * merged with the options provided by the user
+       * @type {Object}
+       */
+      this.options = {},
+
+      /**
+       * Initialize the widget with the right options,
+       * scope (container) and boot
+       * @param {HTMLElement} container - The container of the zoom element
+       * @param {Object} options - The options provided by the user
+       */
+      this.init = function(container, options) {
+          this.$dom.container = $(container);
+          this.options = _.extend($.fn.magnify.defaults, options);
+          this.setup();
+          this.events();
+      },
+
+      /**
+       * Setup minimal dependencies
+       */
+      this.setup = function() {
+          this.setupImage();
+      },
+
+      /**
+       * Create a blank <img> tag which
+       * will be used as the zoom image.
+       */
+      this.setupImage = function() {
+          this.$dom.image = $('<img/>');
+      },
+
+      /**
+       * Attach events and start listen
+       */
+      this.events = function() {
+          this.$dom.image.on('load', this.onLoadImage.bind(this));
+
+          this.$dom.container
+            .on('mouseenter', this.onEnterContainer.bind(this))
+            .on('mouseleave', this.onLeaveContainer.bind(this))
+            .on('mousemove', this.onMoveContainer.bind(this));
+
+          if (this.options.touchSupport) {
+            this.$dom.container
+              .on('touchstart', this.onEnterContainer.bind(this))
+              .on('touchend', this.onLeaveContainer.bind(this))
+              .on('touchmove', this.onMoveContainer.bind(this));
+          }
+
+          this.$dom.container.on('magnify.destroy', this.destroy.bind(this));
+      },
+
+      /**
+       * Callback when the zoom image is loaded
+       */
+      this.onLoadImage = function() {
+          // Insert zoom image in page
+          this.$dom.image
+              .css({
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: this.$dom.image.get(0).width,
+                  height: this.$dom.image.get(0).height,
+                  border: 'none',
+                  maxWidth: 'none',
+                  maxHeight: 'none',
+              })
+              .attr('role', 'presentation')
+              .appendTo(this.$dom.container);
+
+          this.$dom.container.css('overflow', 'hidden');
+          this.flags.imageLoaded = true;
+      },
+
+      /**
+       * Callback when the mouse / finger enters inside
+       * the container
+       */
+      this.onEnterContainer = function(e) {
+          e.preventDefault();
+
+          if (!this.flags.imageLoaded) {
+            this.loadImage();
+          }
+
+          this.showImage();
+      },
+
+      /**
+       * Callback when the mouse / finger leaves
+       * the container
+       */
+      this.onLeaveContainer = function(e) {
+        e.preventDefault();
+        this.hideImage();
+      },
+
+      /**
+       * Callback when the mouse / finger is moving
+       * in the container
+       */
+      this.onMoveContainer = function(e) {
+        e.preventDefault();
+        this.refreshPositionImage(e);
+      },
+
+      /**
+       * Depending the current position of the mouse / finger,
+       * moves the properties top/left of the zoom image. 
+       */
+      this.refreshPositionImage = function(e) {
+          var pageX = e.pageX || e.originalEvent.pageX,
+              pageY = e.pageY || e.originalEvent.pageY,
+              containerOffset = this.$dom.container.offset(),
+              containerWidth = this.$dom.container.outerWidth(),
+              containerHeight = this.$dom.container.outerHeight(),
+              xRatio = (this.$dom.image.prop('width') - containerWidth) / containerWidth,
+              yRatio = (this.$dom.image.prop('height') - containerHeight) / containerHeight,
+              top = (pageY - containerOffset.top),
+              left = (pageX - containerOffset.left);
+
+        top = Math.max(Math.min(top, containerHeight), 0);
+        left = Math.max(Math.min(left, containerWidth), 0);
+
+        this.$dom.image.css({
+          top: (top * -yRatio) + 'px',
+          left: (left * -xRatio) + 'px'
+        });
+      },
+
+      /**
+       * Add the attribute src of the zoom image,
+       * therefore it triggers the load of the zoom
+       * image.
+       */
+      this.loadImage = function() {
+        this.$dom.image.attr('src', this.getUrlImage());
+      },
+
+      /**
+       * Hide the zoom image
+       */
+      this.hideImage = function() {
+        this.$dom.image.css('opacity', 0);
+      },
+
+      /**
+       * Show the zoom image
+       */
+      this.showImage = function() {
+        this.$dom.image.css('opacity', 1);
+      },
+
+      /**
+       * Get the src url of the zoom image
+       */
+      this.getUrlImage = function() {
+        if (!_.isEmpty(this.options.source)) {
+          return this.options.source;
+        }
+
+        return this.$dom.container.find('img').first().data('magnify-source');
+      },
+
+      /**
+       * Teardown the changes
+       */
+      this.destroy = function() {
+        this.$dom.container.off('mouseenter mouseleave mousemove magnify.destroy');
+        this.$dom.image.off('load');
+        this.$dom.image.remove();
+        this.$dom.container.css('overflow', '');
+      }
+  }
+
+  /**
+   * Public jQuery API
+   */
+  
+  $.fn.magnify = function(options) {
+
+      var options = options || {};
+
+      return this.each(function() {
+          new Magnify().init(this, options);
+      });
+  };
+
+  $.fn.magnify.defaults = {
+
+    /**
+     * The url of the zoom image. 
+     * If not specified, the plugin will look for the data attribute
+     * data-magnify-source on the thumbnail <img>.
+     * @type {String}
+     */
+    source: null,
+
+    /**
+     * Do you want to enable finger gestures on
+     * touch-enabled devices?
+     * @type {Boolean}
+     */
+    touchSupport: true
+  };
+
+})(window.jQuery);
+});
+
 require.register("zoom.js", function(exports, require, module) {
 /**
  * @author Jeremie Ges <jges@weblinc.com>
  */
-
-/**
- * Todos:
- * - Pan diagonal
- * - Lazy load picture option
- * - Transition option (maybe possible to change PAN / scale)
- * - Destroy Method
- */
 (function($) {
     function Zoom() {
 
+        /**
+         * Cache DOM properties
+         * @type {Object}
+         */
         this.$dom = {
             container: null,
             image: null,
@@ -181,13 +416,6 @@ require.register("zoom.js", function(exports, require, module) {
             currentScale: 1,
 
             /**
-             * Check if we already tried to load
-             * the zoom image
-             * @type {Boolean}
-             */
-            imageIntentLoading: false,
-
-            /**
              * Check if the zoom image is loaded
              * @type {Boolean}
              */
@@ -205,18 +433,36 @@ require.register("zoom.js", function(exports, require, module) {
             },
 
             /**
-             * [pinchCoordinates description]
+             * When the user starts to pinch, we keep track of the 
+             * coordinates and "freeze" theù until the pinch stops.
+             * Therefore the scale up / down is smoother.
              * @type {Object}
              */
             pinchCoordinates: {
                 x: 0,
                 y: 0
             },
-            pinchScale: 0
+
+            /**
+             * Flag to know if we have to scale down or scale up 
+             * @type {Number}
+             */
+            pinchScale: 0,
+
+            /**
+             * The Hammer js created instance (to be able to destroy it)
+             * @type {Object}
+             */
+            hammer: null
         },
 
         this.options = {},
 
+        /**
+         * Main entry of the widget
+         * @param  {jQueryElement} container The scope
+         * @param  {Object}        options   The options given by the user
+         */
         this.init = function(container, options) {
             this.$dom.container = $(container);
             this.options = _.extend($.fn.zoom.defaults, options);
@@ -224,35 +470,67 @@ require.register("zoom.js", function(exports, require, module) {
             this.events();
         },
 
+        /**
+         * Setup prerequisites before to listen
+         * the events
+         */
         this.setup = function() {
             this.setupImage();
             this.setupThumbnail();
+            this.setupLoadImage();
         },
 
+        /**
+         * Create a blank image where the zoom image
+         * will be stored
+         */
         this.setupImage = function() {
             this.$dom.image = $('<img/>');
         },
 
+        /**
+         * Alias the $dom property thumbnail
+         * to the right image
+         */
         this.setupThumbnail = function() {
             this.$dom.thumbnail = this.$dom.container.find('img').first();
         },
 
+        /**
+         * Will load the image directly if 
+         * needed.
+         */
+        this.setupLoadImage = function() {
+            if (this.options.lazyLoad) {
+                return;
+            }
+
+            this.loadImage();
+        },
+
+        /**
+         * Start to listen the events.
+         */
         this.events = function() {
             this.$dom.image.on('load', this.onLoadImage.bind(this));
 
             this.getInstanceHammer(this.$dom.container.get(0))
                 .on('doubletap', this.onDoubleTapContainer.bind(this))
                 .on('pan',  this.onPanContainer.bind(this))
-                //.on('panright', this.onPanRightContainer.bind(this))
-                //.on('panleft', this.onPanLeftContainer.bind(this))
-                //.on('pandown', this.onPanDownContainer.bind(this))
-                //.on('panup', this.onPanUpContainer.bind(this))
                 .on('pinchstart', this.onPinchStartContainer.bind(this))
                 .on('pinch', this.onPinchContainer.bind(this));
+
+            this.$dom.container.on('zoom.destroy', this.onDestroy.bind(this));
+
+            if (this.options.lazyLoad) {
+                this.$dom.container.on('click', this.onClickContainer.bind(this));
+            }
         },
 
+        /**
+         * When the zoom image is loaded
+         */
         this.onLoadImage = function() {
-            // Insert zoom image in page
             this.$dom.image
                 .css({
                     opacity: 1,
@@ -266,34 +544,41 @@ require.register("zoom.js", function(exports, require, module) {
                     maxHeight: 'none',
                     transformOrigin: '0 0',
                     transform: 'translate(0, 0) scale(1)',
-                    transition: 'all ' + this.options.transition
+                    transition: 'all 1s'
                 })
                 .attr('role', 'presentation')
                 .appendTo(this.$dom.container);
 
             this.$dom.container.css('overflow', 'hidden');
-            this.flags.imageLoaded = true;
 
-            this.getScaleLimitImage();
+            this.flags.imageLoaded = true;
         },
 
         /**
-         * When the user start to pan the container
+         * This callback is only called if the  lazyLoad option is set to true.
+         * Click on the container will trigger the load.
+         */
+        this.onClickContainer = function() {
+            this.loadImage();
+            this.$dom.container.off('click');
+        },
+
+        /**
+         * When the user start to pan on the container
          */
         this.onPanContainer = function(e) {
-            this.$dom.image.css({
-                transition: 'all 0s'
-            });
-
-            e.preventDefault();
-            this.loadImage();
 
             var x = this.flags.imageTranslate.x,
                 y = this.flags.imageTranslate.y,
-                newX = x + (-e.deltaX/1.5),
-                newY = y + (-e.deltaY/1.5);
+                newX = x - (e.deltaX / 3),
+                newY = y - (e.deltaY / 3);
 
-            // Boundaries
+            e.preventDefault();
+
+            if (!this.flags.imageLoaded) {
+                return;
+            }
+
             if (newX > 0) {
                 newX = 0;
             }
@@ -310,16 +595,11 @@ require.register("zoom.js", function(exports, require, module) {
                 newY = this.getPanLimits().y;
             }
 
-
-
             this.$dom.image.css({
-                transform: this.getCssRuleTranslate(newX, newY) + ' ' + this.getCssRuleScale(this.flags.currentScale)
+                transition: 'all 0s'
             });
 
-            this.flags.imageTranslate.y = newY;
-            this.flags.imageTranslate.x = newX;
-
-            console.log(e.deltaX, e.deltaY);
+            this.updateImage(newX, newY);
         },
 
         /**
@@ -329,12 +609,16 @@ require.register("zoom.js", function(exports, require, module) {
          * @param  {Event} e The pinch event
          */
         this.onPinchStartContainer = function(e) {
+            e.preventDefault();
+
+            if (!this.flags.imageLoaded) {
+                return;
+            }
+
             this.$dom.image.css({
                 transition: 'all 1s'
             });
 
-            e.preventDefault();
-            this.loadImage();
             this.flags.pinchCoordinates = e.center;
         },
 
@@ -344,11 +628,13 @@ require.register("zoom.js", function(exports, require, module) {
          * @param  {Event} e The pinch event
          */
         this.onPinchContainer = function(e) {
-            var scale;
+            var scale = e.scale;
 
             e.preventDefault();
 
-            scale = e.scale;
+            if (!this.flags.imageLoaded) {
+                return;
+            }
 
             if (scale < this.flags.pinchScale) {
                 this.onScaleDown();
@@ -364,6 +650,7 @@ require.register("zoom.js", function(exports, require, module) {
          * clicked by the user at the start of the pinch
          */
         this.onScaleDown = function() {
+
             var scale = this.flags.currentScale,
                 containerOffset = this.$dom.container.offset(),
                 mousePositionOnImageX,
@@ -373,17 +660,21 @@ require.register("zoom.js", function(exports, require, module) {
                 x,
                 y;
 
+            if (!this.flags.imageLoaded) {
+                return;
+            }
+
             if (scale <= 1) {
                 return;
             }
 
-            scale = scale - this.options.deltas.scale;
+            scale = scale - this.options.deltaScale;
 
             mousePositionOnImageX = this.flags.pinchCoordinates.x - containerOffset.left;
             mousePositionOnImageY = this.flags.pinchCoordinates.y - containerOffset.top;
 
-            offsetX = mousePositionOnImageX * this.options.deltas.scale;
-            offsetY = mousePositionOnImageY * this.options.deltas.scale;
+            offsetX = mousePositionOnImageX * this.options.deltaScale;
+            offsetY = mousePositionOnImageY * this.options.deltaScale;
 
             x = this.flags.imageTranslate.x < 0 ? this.flags.imageTranslate.x : 0;
             y = this.flags.imageTranslate.y < 0 ? this.flags.imageTranslate.y : 0;
@@ -397,15 +688,7 @@ require.register("zoom.js", function(exports, require, module) {
                 offsetY = 0;
             }
 
-            this.$dom.image.css({
-                transform: this.getCssRuleTranslate(offsetX, offsetY) + ' ' + this.getCssRuleScale(scale)
-            });
-
-            // Keep track of things
-            this.flags.imageTranslate.x = offsetX;
-            this.flags.imageTranslate.y = offsetY;
-            this.flags.currentScale = scale;
-
+            this.updateImage(offsetX, offsetY, scale);
         },
 
         /**
@@ -413,13 +696,17 @@ require.register("zoom.js", function(exports, require, module) {
          * clicked by the user at the start of the pinch
          */
         this.onScaleUp = function() {
-            var scale = this.flags.currentScale + this.options.deltas.scale,
+
+            var scale = this.flags.currentScale + this.options.deltaScale,
                 containerOffset = this.$dom.container.offset(),
                 offsetX,
                 offsetY,
                 mousePositionOnImageX,
-                mousePositionOnImageY,
-                transform;
+                mousePositionOnImageY;
+
+            if (!this.flags.imageLoaded) {
+                return;
+            }
 
             if (scale > this.getScaleLimitImage()) {
                 return;
@@ -428,19 +715,13 @@ require.register("zoom.js", function(exports, require, module) {
             mousePositionOnImageX = (this.flags.pinchCoordinates.x - containerOffset.left);
             mousePositionOnImageY = (this.flags.pinchCoordinates.y - containerOffset.top);
 
-            offsetX = -(mousePositionOnImageX * this.options.deltas.scale);
-            offsetY = -(mousePositionOnImageY * this.options.deltas.scale);
+            offsetX = -(mousePositionOnImageX * this.options.deltaScale);
+            offsetY = -(mousePositionOnImageY * this.options.deltaScale);
 
             offsetX = offsetX < 0 ? offsetX + this.flags.imageTranslate.x : 0;
             offsetY = offsetY < 0 ? offsetY + this.flags.imageTranslate.y : 0;
 
-            this.$dom.image.css({
-                transform: this.getCssRuleTranslate(offsetX, offsetY) + ' ' + this.getCssRuleScale(scale)
-            });
-
-            this.flags.imageTranslate.x = offsetX;
-            this.flags.imageTranslate.y = offsetY;
-            this.flags.currentScale = scale;
+            this.updateImage(offsetX, offsetY, scale);
         },
 
         /**
@@ -449,11 +730,14 @@ require.register("zoom.js", function(exports, require, module) {
          * to its maximum or minimum
          */
         this.onDoubleTapContainer = function(e) {
+
             var coordinates = e.center;
 
             e.preventDefault();
 
-            this.loadImage();
+            if (!this.flags.imageLoaded) {
+                return;
+            }
 
             this.$dom.image.css({
                 transition: 'all 1s'
@@ -464,106 +748,6 @@ require.register("zoom.js", function(exports, require, module) {
             } else {
                 this.zoomMinimum();
             }
-        },
-
-        /**
-         * When the user pan up, move
-         * the picture on the bottom
-         */
-        this.onPanUpContainer = function(e) {
-
-            var x = this.flags.imageTranslate.x,
-                y = this.flags.imageTranslate.y,
-                newY = y - this.options.deltas.pan;
-                newX = x;
- 
-
-            if (this.getDirection(e) === 'right') {
-                // 0 to 90
-                // 10 to 80 -> apply slow
-                // 30 to 60 -> apply aggressive
-                newX = x - (this.options.deltas.pan * velocity);
-            }
-
-            if (this.getDirection(e) === 'left') {
-                // 90 to 180
-                // 100 to 170 -> apply slow
-                // 120 to 150 -> apply aggressive
-                
-                if (e.angle )
-                newX = x + (this.options.deltas.pan / 4);
-            }
-            
-            if (newY < this.getPanLimits().y) {
-                return;
-            }
-
-            this.$dom.image.css({
-                transform: this.getCssRuleTranslate(newX, newY) + ' ' + this.getCssRuleScale(this.flags.currentScale)
-            });
-
-            this.flags.imageTranslate.y = newY;
-            this.flags.imageTranslate.x = newX;
-        },
-
-        /**
-         * When the user pan down, move
-         * the picture on the top
-         */
-        this.onPanDownContainer = function() {
-            var x = this.flags.imageTranslate.x,
-                y = this.flags.imageTranslate.y;
-                newY = y + this.options.deltas.pan;
-
-            if (newY > 0) {
-                return;
-            }
-
-            this.$dom.image.css({
-                transform: this.getCssRuleTranslate(x, newY) + ' ' + this.getCssRuleScale(this.flags.currentScale)
-            });
-
-            this.flags.imageTranslate.y = newY;
-        },
-
-        /**
-         * When the user pan right, move
-         * the picture on the left
-         */
-        this.onPanRightContainer = function() {
-            var y = this.flags.imageTranslate.y,
-                x = this.flags.imageTranslate.x,
-                newX = x + this.options.deltas.pan;
-
-            if (newX > 0) {
-                return;
-            }
-
-            this.$dom.image.css({
-                transform: this.getCssRuleTranslate(newX, y) + ' ' + this.getCssRuleScale(this.flags.currentScale)
-            });
-
-            this.flags.imageTranslate.x = newX;
-        },
-
-        /**
-         * When the user pan left, move
-         * the picture on the right
-         */
-        this.onPanLeftContainer =  function() {
-            var y = this.flags.imageTranslate.y,
-                x = this.flags.imageTranslate.x,
-                newX = x - this.options.deltas.pan;
-
-            if (newX < this.getPanLimits().x) {
-                return;
-            }
-
-            this.$dom.image.css({
-                transform: this.getCssRuleTranslate(newX, y) + ' ' + this.getCssRuleScale(this.flags.currentScale)
-            });
-
-            this.flags.imageTranslate.x = newX;
         },
 
         /**
@@ -583,30 +767,18 @@ require.register("zoom.js", function(exports, require, module) {
                 offsetY = 0;
             }
 
-            this.$dom.image.css({
-                transform: this.getCssRuleTranslate(offsetX, offsetY) + ' ' + this.getCssRuleScale(maximumScale)
-            });
-
-            this.flags.imageTranslate.x = offsetX;
-            this.flags.imageTranslate.y = offsetY;
-            this.flags.currentScale = maximumScale;
+            this.updateImage(offsetX, offsetY, maximumScale);
         },
 
         /**
          * Will scale down to scale 1
          */
         this.zoomMinimum = function() {
-            var minimumScale = 1;
+            var x = 0,
+                y = 0,
+                minimumScale = 1;
 
-            this.$dom.image.css({
-                top: 0,
-                left: 0,
-                transform: this.getCssRuleTranslate(0, 0) + ' ' + this.getCssRuleScale(minimumScale)
-            });
-
-            this.flags.imageTranslate.x = 0;
-            this.flags.imageTranslate.y = 0;
-            this.flags.currentScale = minimumScale;
+            this.updateImage(x, y, minimumScale);
         },
 
         /**
@@ -631,32 +803,45 @@ require.register("zoom.js", function(exports, require, module) {
                 return;
             }
 
-            if (this.flags.imageIntentLoading) {
-                return;
-            }
-
             this.$dom.image.attr('src', this.getUrlImage());
-            this.flags.imageIntentLoading = true;
         },
 
-        this.getDirection = function(e) {
+        /**
+         * Apply x, y, scale to the zoom image
+         * @param  {Number} x     Translate to x
+         * @param  {Number} y     Translate to y
+         * @param  {scale}  scale The scale to apply
+         */
+        this.updateImage = function(x, y, scale) {
+            scale = scale || this.flags.currentScale;
 
-            if (e.angle === -90) { 
-                return 'straight';
-            }
+            // Let's be nice with the browser and give him
+            // rounded values.
+            x = Math.round(x);
+            y = Math.round(y);
 
-            if (e.angle < -90) {
-                return 'right';
-            } 
-            
-            return 'left';
-        },
+            this.$dom.image.css({
+                transform: this.getCssRuleTranslate(x, y) + ' ' + this.getCssRuleScale(scale)
+            });
+
+            // Keep track of transformations
+            this.flags.imageTranslate.y = y;
+            this.flags.imageTranslate.x = x;
+            this.flags.currentScale = scale;
+        }
 
         /**
          * Get the url of the zoom image to use.
          * @return {String} Url (relative or absolute)
          */
         this.getUrlImage = function() {
+            var url = this.options.url;
+
+            if (!_.isEmpty(url)) {
+                return url;
+            }
+
+            // Let's find by the attribute
             return this.$dom.container.data('zoom-src');
         },
 
@@ -683,7 +868,7 @@ require.register("zoom.js", function(exports, require, module) {
          * When the zoom image is panning (up / down / left / right),
          * we need to know what are the limits for X and Y to avoid
          * to pan outside of the container.
-         * @return {Object} The X / Y limits
+         * @return {Object} The X / Y coordinates limits
          */
         this.getPanLimits = function() {
             var xLimit = (this.$dom.image.width() * this.flags.currentScale) - this.$dom.container.width(),
@@ -708,7 +893,7 @@ require.register("zoom.js", function(exports, require, module) {
 
         /**
          * Get the real width / height of the zoom image
-         * @return {Object} The widht / height
+         * @return {Object} The width / height
          */
         this.getNaturalDimensionsImage = function() {
             return {
@@ -717,10 +902,21 @@ require.register("zoom.js", function(exports, require, module) {
             }
         },
 
+        /**
+         * Abstraction to clean up the code.
+         * @param  {Mixed} x The X coordinates
+         * @param  {Mixed} y The Y coordinates
+         * @return {String} The css translate rule for the transform property
+         */
         this.getCssRuleTranslate = function(x, y) {
             return 'translate(' + x + 'px,' + y + 'px)';
         },
 
+        /**
+         * Abstraction to clean up the code.
+         * @param  {Mixed} scale The scale
+         * @return {String} The css scale rule for the transform property
+         */
         this.getCssRuleScale = function(scale) {
             return 'scale(' + scale + ')';
         },
@@ -739,11 +935,28 @@ require.register("zoom.js", function(exports, require, module) {
             var manager = new Hammer.Manager(element),
                 doubleTap = new Hammer.Tap({event: 'doubletap', taps: 2}),
                 pinch = new Hammer.Pinch(),
-                pan = new Hammer.Pan({threshold: 0, direction: Hammer.DIRECTION_ALL});
+                pan = new Hammer.Pan({threshold: 0});
 
             manager.add([doubleTap, pinch, pan]);
 
+            this.flags.hammer = manager;
+
             return manager;
+        },
+
+        /**
+         * Destroy the widget
+         */
+        this.onDestroy = function() {
+
+            // Shutdown events
+            this.$dom.image.off('load');
+            this.flags.hammer.off('doubletap pan pinchstart pinch');
+            this.$dom.container.off('zoom.destroy');
+            this.$dom.container.off('click');
+
+            // Remove added DOM
+            this.$dom.image.remove();
         }
     }
 
@@ -761,12 +974,31 @@ require.register("zoom.js", function(exports, require, module) {
     };
 
     $.fn.zoom.defaults = {
-        transition: '1s',
+
+        /**
+         * Do you want to lazy load the zoom image?
+         * We will load the zoom image when the user clicks
+         * one time on the container.
+         * @type {Boolean}
+         */
         lazyLoad: true,
-        deltas: {
-            pan: 20,
-            scale: 0.05
-        }
+
+        /**
+         * What is the increment scale you want to use
+         * when scale up / down.
+         * 
+         * @example
+         * 1 -> 1.05 -> 1.10 -> ..
+         * 
+         * @type {Number}
+         */
+        deltaScale: 0.05,
+
+        /**
+         * The url to use 
+         * @type {[type]}
+         */
+        url: null
     };
 
 }(window.jQuery));
